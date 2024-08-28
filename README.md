@@ -2,9 +2,9 @@
 
 ### Train
 
-    cd MVCINN-code/
+    cd code/
   
-    train.py
+    python train.py
   
     Change other arguments that you can train your own model.
 
@@ -13,6 +13,6 @@
 
     cd MVCINN-code/
   
-    test.py
+    python test.py
   
     Change other arguments that you can train your own model.
