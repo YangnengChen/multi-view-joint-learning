@@ -1,4 +1,4 @@
-This code is for MVCINN.
+This code is for multi-view-joint-learning.
 
 The dataset can be download from [here](https://github.com/mfiddr/MFIDDR)
 # TODO
