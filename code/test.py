@@ -69,7 +69,7 @@ def test_model2(netname, model, test_loader, dataset_size, criterion, device):
     running_loss = 0.0
     running_corrects = 0
     model.eval()
-    # 收集数据标签
+    # collect data lable
     all_labels = []
     
     valid_bar = tqdm(test_loader)
@@ -104,12 +104,12 @@ def test_model2(netname, model, test_loader, dataset_size, criterion, device):
         
         running_loss += loss.item()
         
-    # # 统计数据分布
+    # record data distribution
     label_counts = [0,0,0,0,0]
     for label in all_labels:
         label_counts[label] += 1
 
-    # 打印数据分布
+    # print data distribution
     print("数据分布：")
     for label in [0,1,2,3,4]:
         print(f"类别 {label}: {label_counts[label]} 个样本")
@@ -137,13 +137,13 @@ def test_model2(netname, model, test_loader, dataset_size, criterion, device):
                   }
         else:
             roc_df = {
-                  '样本id': img_ids[batch_i],
+                  'samle id': img_ids[batch_i],
                   '0': outputs_softmax[batch_i][0].item(),
                   '1': outputs_softmax[batch_i][1].item(),
                   '2': outputs_softmax[batch_i][2].item(),
                   '3': outputs_softmax[batch_i][3].item(),
                   '4': outputs_softmax[batch_i][4].item(),
-                  '分级结果': preds[batch_i].item(),
+                  'pred': preds[batch_i].item(),
                   'level': labels[batch_i].item(),
                   }        
         # roc_matrix = roc_matrix.append(roc_df, ignore_index=True)
@@ -195,7 +195,7 @@ def test_model2(netname, model, test_loader, dataset_size, criterion, device):
     if not CROSS:
         roc_matrix.to_csv(netname + '_roc_data.csv', encoding='gbk')
     else:
-        roc_matrix.to_csv(netname + '_交叉验证.csv', encoding='gbk')
+        roc_matrix.to_csv(netname + '_cross_validation.csv', encoding='gbk')
 
     # calculate the Kappa
     pe0 = (tp[0] + fn[0]) * (tp[0] + fp[0])
@@ -243,7 +243,7 @@ if __name__ == '__main__':
 
     TEST_PATH = "/data/cyn/data/MFIDDR/test/"
     BATCH_SIZE = 8
-    MODELPATH = "/data/cyn/model/nfnet_MVCINN/ETMC.pth"
+    MODELPATH = "/data/cyn/model/nfnet_MVCINN/best_acc-ETMC_05-18-00:09-0.8150.pth"
     checkpoint = torch.load(MODELPATH)
     DEPTH = 12
     HEAD = 9

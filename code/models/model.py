@@ -108,15 +108,11 @@ class Nfnet(nn.Module):
     def __init__(self, n_classes, model_path,pretrained=False,weight_type='npz',embed_dim=None,freeze_layers=False,using_decoder=False):
 
         super(Nfnet, self).__init__()
-
         self.model =dm_nfnet_f5()
-        
 
 
         if pretrained:
-            if weight_type=='npz':
-                self.model.load_pretrained(checkpoint_path=model_path)
-            elif weight_type == 'pth':
+            if weight_type == 'pth':
                 if model_path != "":
                     assert os.path.exists(model_path), "weights file: '{}' not exist.".format(model_path)
                     weights_dict = torch.load(model_path, map_location=torch.device('cuda:0' if torch.cuda.is_available() else 'cpu'))
@@ -126,50 +122,14 @@ class Nfnet(nn.Module):
                             if key.startswith('classifier.'):
                                 weights_dict.pop(key)
                         print(self.model.load_state_dict(weights_dict, strict=False))
-                    elif isinstance(weights_dict, dict):
-                        if 'model' in weights_dict:
-                            print(self.model.load_state_dict(weights_dict['model'], strict=False))
-                        else:
-                            if  'blocks.0.mlp.w12.weight' in weights_dict:
-                                for block_idx in range(40):
-                                # 生成旧键和新键
-                                    old_weight_keys = [
-                                        f'blocks.{block_idx}.mlp.w12.weight',
-                                        f'blocks.{block_idx}.mlp.w12.bias',
-                                        f'blocks.{block_idx}.mlp.w3.weight',
-                                        f'blocks.{block_idx}.mlp.w3.bias'
-                                    ]
-                                    
-                                    new_weight_keys = [
-                                        f'blocks.{block_idx}.mlp.fc1.weight',
-                                        f'blocks.{block_idx}.mlp.fc1.bias',
-                                        f'blocks.{block_idx}.mlp.fc2.weight',
-                                        f'blocks.{block_idx}.mlp.fc2.bias'
-                                    ]
-
-                                    # 遍历旧键和新键
-                                    for old_key, new_key in zip(old_weight_keys, new_weight_keys):
-                                        # 使用旧键从 weight_dict 中获取权重张量
-                                        weight_tensor = weights_dict[old_key]
-                                        # 删除旧键
-                                        del weights_dict[old_key]
-                                        # 使用新键将权重张量添加回 weight_dict 中
-                                        weights_dict[new_key] = weight_tensor
-
-                                # 现在，weight_dict 中包含了更新后的权重键
-                                print(self.model.load_state_dict(weights_dict, strict=False))   
-
-
-                            else:
-                                print(self.model.load_state_dict(weights_dict, strict=False))
-                    else:
-                        print('Error')
+            else:
+                print('Error')
         
         self.model.head.fc = nn.Identity()
             
         if freeze_layers:
             for name, params in self.model.named_parameters():
-                # 除head外，其他权重全部冻结
+                # Except head, all other weights are frozen
                 if "head" not in name:
                     # print(name)
                     params.requires_grad_(False)
@@ -213,7 +173,6 @@ def load_checkpoint(model,checkpoint_path,global_pool=True,device='cuda'):
             del checkpoint_model[k]
 
     # interpolate position embedding
-    # 位置嵌入插值以适应高分辨率
     interpolate_pos_embed(model, checkpoint_model)
 
     # load pre-trained model
@@ -233,13 +192,14 @@ def load_checkpoint(model,checkpoint_path,global_pool=True,device='cuda'):
 class SKNet(nn.Module):
     def __init__(self, in_channels, out_channels, stride=1, M=2, r=16, L=32):
         """
-        :param in_channels:  输入通道维度
-        :param out_channels: 输出通道维度   原论文中 输入输出通道维度相同
-        :param stride:  步长，默认为1
-        :param M:  分支数
-        :param r: 特征Z的长度，计算其维度d 时所需的比率（论文中 特征S->Z 是降维，故需要规定 降维的下界）
-        :param L:  论文中规定特征Z的下界，默认为32
-        采用分组卷积： groups = 32,所以输入channel的数值必须是group的整数倍
+        :param in_channels:  The dimension of the input channels
+        :param out_channels: The dimension of the output channels; in the original paper, the input and output channel dimensions are the same
+        :param stride:  Stride, default is 1
+        :param M:  Number of branches
+        :param r: The length of feature Z, the required ratio when calculating its dimension d (in the paper, feature S -> Z is a dimensionality reduction, so a lower bound for the reduction must be specified)
+        :param L:  The lower bound of feature Z specified in the paper, default is 32
+        Using grouped convolution: groups = 32, so the number of input channels must be a multiple of the group size
+
         """
         super(SKNet, self).__init__()
         d = max(in_channels // r, L)  
@@ -254,14 +214,14 @@ class SKNet(nn.Module):
         self.global_pool = nn.AdaptiveAvgPool2d(output_size=1) 
         self.fc1 = nn.Sequential(nn.Conv2d(out_channels, d, 1, bias=False),
                                  nn.BatchNorm2d(d),
-                                 nn.ReLU(inplace=True))  # 降维
+                                 nn.ReLU(inplace=True))  # Dimensionality reduction
         self.fc2 = nn.Conv2d(d, out_channels * M, 1, 1, bias=False)  
         self.softmax = nn.Softmax(dim=1) 
     def forward(self, input):
         batch_size = input.size(0)
         output = []
         for i, conv in enumerate(self.conv):
-            output.append(conv(input))# output 为不同路径的卷积得到的结果
+            output.append(conv(input))# output is the result of convolution of different paths
         U = reduce(lambda x, y: x + y, output)  
         s = self.global_pool(U)  
         z = self.fc1(s)
@@ -272,7 +232,7 @@ class SKNet(nn.Module):
         a_b = list(map(lambda x: x.reshape(batch_size, self.out_channels, 1, 1),
                        a_b))  
         V = list(map(lambda x, y: x * y, output,
-                     a_b))  # a_b为不同路径计算得到的注意力权重，乘以output再相加得到不同路径注意力加权的结果
+                     a_b))  # a_b is the attention weight calculated by different paths, multiplied by output and then added to get the results of attention weighting of different paths.
         V = reduce(lambda x, y: x + y,
                    V)  
         return V
@@ -558,7 +518,7 @@ class MergeView(nn.Module):
         self.num_views = num_views
         
     def forward(self, x):
-        # 将四个视图的特征乘以对应的权重并求和
+        # Multiply the features of the four views by the corresponding weights and sum them
         weighted_features = torch.stack([(x[:, i, :, :, :] * self.weight[i]) for i in range(self.num_views)], dim=1)
         fused_feature = torch.sum(weighted_features, dim=1)
         return fused_feature
@@ -569,7 +529,7 @@ class MergeView_albation(nn.Module):
         
         
     def forward(self, x):
-        # 将四个视图的特征取平均值
+        # Average the features of four views
         avg_feature = torch.mean(x, dim=1)
         return avg_feature
 
@@ -583,12 +543,12 @@ class FuseViewFeatures(nn.Module):
         if SK_net:
             self.SK_net=SKNet(in_channels=4*3072,out_channels=4*3072,M=M,r=r,L=L)
     def forward(self, x):
-        # 输入x的形状为[batch_size, num_views, embedding, H, W]
-        # 将视图维度移到通道维度，得到形状为[batch_size, embedding*num_views, H, W]
+        # The shape of the input x is [batch_size, num_views, embedding, H, W]
+        # Move the view dimension to the channel dimension, and the shape is [batch_size, embedding*num_views, H, W]
         x = x.permute(0, 2, 1, 3, 4).contiguous().view(x.size(0), -1, x.size(3), x.size(4))
         if self.using_SK_net:
             x=self.SK_net(x)
-        # 使用卷积层将四个视图的特征融合为[batch_size, embedding, H, W]
+        # Use convolutional layers to fuse the features of the four views into [batch_size, embedding, H, W]
         fused_feature = self.conv(x)
         fused_feature = self.relu(fused_feature)
 
@@ -613,7 +573,7 @@ class FuseView(nn.Module):
     
     def forward(self, x):
         x=self.joint(x)
-        # 使用卷积层将四个视图的特征融合为[batch_size, embedding, H, W]
+        # Use convolutional layers to fuse the features of the four views into [batch_size, embedding, H, W]
         fused_feature = self.conv(x)
         fused_feature = self.relu(fused_feature)
 
@@ -628,8 +588,8 @@ class FuseViewFeatures3D(nn.Module):
     
     
     def forward(self, x):
-        # 输入x的形状为[batch_size, num_views, embedding, H, W]
-        # 使用卷积层将四个视图的特征融合为[batch_size, embedding, H, W]
+        # The shape of the input x is [batch_size, num_views, embedding, H, W]
+        # Use convolutional layers to fuse the features of the four views into [batch_size, embedding, H, W]
         # print(x.size())
         fused_feature = self.conv(x)
         # fused_feature = fused_feature+self.relu(fused_feature)

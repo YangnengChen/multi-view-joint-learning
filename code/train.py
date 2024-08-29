@@ -93,6 +93,9 @@ def model_forward(i_epoch, ce_loss,alpha,alpha_a, tgt):
     return loss
 
 def main(model_name,N_EPOCHS=100,LR = 0.0001,depth=12,head=9):
+    # model = ViT(num_classes=5, pretrained=True)
+    # model = Deit(num_classes=5, pretrained=True)
+    # model = ResNet50(num_classes=5 , heads=4)
     print(model_name)
     if USING_ETMC:
         model=ETMC()
